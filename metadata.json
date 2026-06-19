@@ -3,7 +3,7 @@
   "version": 1,
   "description": "Control the Framework laptop power button LED from the GNOME quick settings panel.",
   "uuid": "fw-battery-led@framework.local",
-  "url": "https://github.com/victorhck/fw-gnome-battery-led",
+  "url": "https://github.com/T4rg3n/fw-gnome-battery-led",
   "shell-version": ["47", "48", "49", "50"],
   "settings-schema": "org.gnome.shell.extensions.fw-battery-led",
   "gettext-domain": "fw-battery-led@framework.local"
