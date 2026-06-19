@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.fw-battery-led"
+          path="/org/gnome/shell/extensions/fw-battery-led/">
+    <key name="mode" type="s">
+      <default>'white'</default>
+      <summary>LED Mode</summary>
+      <description>
+        The active power-button LED mode.
+        Allowed values: "off", "white", "battery".
+      </description>
+    </key>
+  </schema>
+</schemalist>

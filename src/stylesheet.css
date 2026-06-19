@@ -1,0 +1,10 @@
+/* Based on GPL-3.0 Licensed Code from
+   https://github.com/maniacx/Battery-Health-Charging/blob/main/stylesheet.css */
+
+.fw-battery-led-popup-menu {
+  background-color: rgba(128, 128, 128, 0);
+}
+
+.fw-battery-led-popup-menu:hover {
+  background-color: rgba(128, 128, 128, 0);
+}
