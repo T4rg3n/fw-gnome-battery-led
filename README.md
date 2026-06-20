@@ -5,9 +5,9 @@ to the quick-settings panel. Three modes are available:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Off** | LED disabled |
-| **White** | Constant white (Framework default) |
-| **Battery Indicator** | Colour reflects battery level (blue while charging) |
+| **Off** | LED disabled via `brightnessctl` (brightness → 0) |
+| **White** | White colour profile + brightness 100 |
+| **Battery Indicator** | Colour by battery level + brightness 100 |
 
 ### Battery colour map
 
@@ -45,10 +45,11 @@ cd fw-gnome-battery-led
 ```
 
 `build.sh` will:
-1. Build a Podman container with Node.js + pnpm + glib tools.
-2. Run `pnpm install && pnpm build` inside the container (output → `dist/`).
-3. Copy `dist/` to `~/.local/share/gnome-shell/extensions/fw-battery-led@framework.local`.
-4. Print the remaining manual steps.
+1. Build a Podman container with Node.js + glib tools.
+2. Run `npm install && npm run build` inside the container (output → `dist/`).
+3. Create `~/.local/share/gnome-shell/extensions/` if it does not exist yet.
+4. Copy `dist/` to `~/.local/share/gnome-shell/extensions/fw-battery-led@framework.local`.
+5. Print the remaining manual steps.
 
 ---
 
@@ -61,8 +62,17 @@ runtime.
 
 ```bash
 sudo cp 60-framework-power-led.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo udevadm control --reload-rules
+sudo udevadm trigger /sys/class/leds/chromeos:multicolor:power
+
+# Confirm the attribute file (not just the device dir) is writable
+stat /sys/class/leds/chromeos:multicolor:power/multi_intensity
+# Expected: Access (0664/...)  GID (39/video)
 ```
+
+Note: `MODE=` / `GROUP=` in udev only affect the device node udev creates.
+The kernel creates `multi_intensity` separately as `root:root 0644`, so this
+rule uses `RUN+=` to chmod/chgrp that file directly.
 
 ### 2 — Verify group membership
 
@@ -128,9 +138,9 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ## Security notes
 
-- **No sudo at runtime.** The udev rule grants `GROUP="video"` with `MODE="0664"`
-  to the single sysfs LED file. The extension writes to it directly via
-  `Gio.File` — no subprocess, no polkit.
+- **No sudo at runtime.** A udev `RUN` rule chmods/chgrps the single
+  `multi_intensity` sysfs file to `0664` / `video`. The extension writes to it
+  directly via `Gio.File` — no subprocess, no polkit.
 - **No network access.** The extension only touches local sysfs and the system
   D-Bus (UPower, read-only).
 - **Battery data via D-Bus.** Battery percentage and charging state are read
@@ -138,7 +148,46 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ---
 
-## Project structure
+## Troubleshooting
+
+### Check extension logs
+
+```bash
+journalctl --user -b -g "fw-battery-led" --no-pager
+journalctl --user -b -f -g "fw-battery-led"   # live, while switching modes
+```
+
+### Permission denied on `multi_intensity`
+
+If `stat` still shows `0644 root:root`, the udev rule has **not** run yet.
+Common causes:
+
+- Used `--name-match` (wrong — that is for `/dev` names only)
+- Trigger not run after copying the updated rules file
+
+Apply and verify:
+
+```bash
+sudo cp 60-framework-power-led.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger /sys/class/leds/chromeos:multicolor:power
+
+stat /sys/class/leds/chromeos:multicolor:power/multi_intensity
+# Must show: Access (0664/...)  GID (39/video)
+```
+
+No re-login is needed for the udev change itself. You only need `video`
+in your current session (`groups` must list it).
+
+Test a manual write:
+
+```bash
+echo "0 0 0 0 100 0" > /sys/class/leds/chromeos:multicolor:power/multi_intensity
+```
+
+If that works, reload the extension (`./build.sh --reinstall` or log out/in).
+
+---
 
 ```
 fw-gnome-battery-led/

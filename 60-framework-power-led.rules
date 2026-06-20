@@ -1,15 +1,20 @@
 # udev rule for the Framework laptop power-button multicolour LED.
 #
-# Grants members of the `video` group write access to the LED's multi_intensity
-# sysfs file so the GNOME extension can change the LED colour without sudo or
-# polkit. This is the *only* file that needs elevated permissions.
+# MODE/GROUP only apply to the udev device node — NOT to kernel-created sysfs
+# attribute files such as multi_intensity. We must chmod/chgrp that file explicitly.
 #
 # Install:
 #   sudo cp 60-framework-power-led.rules /etc/udev/rules.d/
-#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger /sys/class/leds/chromeos:multicolor:power
 #
-# Your user must be in the `video` group (run `groups` to check):
-#   sudo usermod -aG video $USER   # then re-login
+# Verify:
+#   stat /sys/class/leds/chromeos:multicolor:power/multi_intensity
+#   # should show: Access (0664/...) GID (39/video)
+#
+# Your user must be in the `video` group, then re-login:
+#   sudo usermod -aG video $USER
 
-SUBSYSTEM=="leds", KERNEL=="chromeos:multicolor:power", \
-  MODE="0664", GROUP="video"
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="chromeos:multicolor:power", \
+  RUN+="/usr/bin/chmod 0664 /sys$devpath/multi_intensity", \
+  RUN+="/usr/bin/chgrp video /sys$devpath/multi_intensity"
