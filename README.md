@@ -1,27 +1,35 @@
 # fw-gnome-battery-led
 
 A GNOME Shell extension for Framework laptops that adds a **Power LED** button
-to the quick-settings panel. Three modes are available:
+to the quick-settings panel. 
 
-| Mode | Behaviour |
-|------|-----------|
-| **Off** | LED disabled via `brightnessctl` (brightness → 0) |
-| **White** | White colour profile + brightness 100 |
-| **Battery Indicator** | Colour by battery level + brightness 100 |
+
+
+Three modes are available:
+
+
+| Mode                  | Behaviour                                         |
+| --------------------- | ------------------------------------------------- |
+| **Off**               | LED disabled via `brightnessctl` (brightness → 0) |
+| **White**             | White colour profile                              |
+| **Battery Indicator** | Colour by battery level                           |
+
 
 ### Battery colour map
 
-| Condition | Colour |
-|-----------|--------|
-| Charging | Blue |
-| ≥ 50 % | White |
-| 30 – 49 % | Green |
-| 20 – 29 % | Yellow |
-| 10 – 19 % | Amber |
-| < 10 % | Red |
 
-Thresholds are defined as constants in [`src/led.ts`](src/led.ts) and can be
-edited before building.
+| Condition | Colour | Photo |
+| --------- | ------ | ----- |
+| ≥ 50 %    | White  |       |
+| 30 – 49 % | Green  |       |
+| 20 – 29 % | Yellow |       |
+| 10 – 19 % | Amber  |       |
+| < 10 %    | Red    |       |
+
+
+Thresholds are defined in preferences menu:
+
+
 
 ---
 
@@ -45,6 +53,7 @@ cd fw-gnome-battery-led
 ```
 
 `build.sh` will:
+
 1. Build a Podman container with Node.js + glib tools.
 2. Run `npm install && npm run build` inside the container (output → `dist/`).
 3. Create `~/.local/share/gnome-shell/extensions/` if it does not exist yet.
@@ -102,24 +111,17 @@ gnome-extensions enable fw-battery-led@framework.local
 
 ## Day-to-day workflow
 
-### Rebuild & reinstall after source changes
+### First install (no prior installation)
 
 ```bash
-./build.sh --reinstall
+./build.sh      # build + install, then follow the printed next-steps
 ```
-
-This disables the extension, rebuilds inside the container, reinstalls, re-enables,
-and attempts to reload GNOME Shell automatically (X11 only; on Wayland you will
-be prompted to log out and back in).
 
 ### Uninstall
 
 ```bash
 ./build.sh --uninstall
 ```
-
-Disables the extension, removes it from `~/.local/share/gnome-shell/extensions/`,
-and prompts you to reload GNOME Shell.
 
 To also remove the udev rule:
 
@@ -128,10 +130,13 @@ sudo rm /etc/udev/rules.d/60-framework-power-led.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-### First install (no prior installation)
+### Rebuild & reinstall
+
+Useful for source changes. 
+Triggers a whole rebuild, reinstall & re-enable.
 
 ```bash
-./build.sh      # build + install, then follow the printed next-steps
+./build.sh --reinstall
 ```
 
 ---
@@ -139,12 +144,12 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ## Security notes
 
 - **No sudo at runtime.** A udev `RUN` rule chmods/chgrps the single
-  `multi_intensity` sysfs file to `0664` / `video`. The extension writes to it
-  directly via `Gio.File` — no subprocess, no polkit.
+`multi_intensity` sysfs file to `0664` / `video`. The extension writes to it
+directly via `Gio.File` — no subprocess, no polkit.
 - **No network access.** The extension only touches local sysfs and the system
-  D-Bus (UPower, read-only).
+D-Bus (UPower, read-only).
 - **Battery data via D-Bus.** Battery percentage and charging state are read
-  from `org.freedesktop.UPower` — no shell commands.
+from `org.freedesktop.UPower` — no shell commands.
 
 ---
 
@@ -210,3 +215,4 @@ fw-gnome-battery-led/
     └── schemas/
         └── org.gnome.shell.extensions.fw-battery-led.gschema.xml
 ```
+
