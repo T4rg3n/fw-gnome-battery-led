@@ -216,3 +216,11 @@ fw-gnome-battery-led/
         └── org.gnome.shell.extensions.fw-battery-led.gschema.xml
 ```
 
+---
+
+## Disclaimer
+
+This software is under MIT license and provided **"as is"**, without warranty of any kind, express or
+implied, including but not limited to warranties of merchantability, fitness for
+a particular purpose, or non-infringement.
+The authors and contributors are not liable for any trouble arising from installation or use of this software.
