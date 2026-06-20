@@ -15,6 +15,7 @@ const MULTI_INTENSITY_PATH = `/sys/class/leds/${LED_DEVICE}/multi_intensity`;
 // multi_index order on the Framework laptop: red green blue yellow white amber
 // Each value is 0–100 intensity for the corresponding colour component.
 const INTENSITY = {
+  off:    '0 0 0 0 0 0',
   red:    '100 0 0 0 0 0',
   green:  '0 100 0 0 0 0',
   blue:   '0 0 100 0 0 0',
@@ -64,23 +65,8 @@ function writeIntensity(value: string): void {
 }
 
 /**
- * Controls the LED on/off via brightnessctl. The `brightness` sysfs file is
- * root-only, so brightnessctl (which is setuid-free and uses its own helper)
- * is required. multi_intensity sets colour; brightness sets lightness.
- */
-function setBrightness(level: number): void {
-  const proc = Gio.Subprocess.new(
-    ['brightnessctl', '-d', LED_DEVICE, 'set', String(level)],
-    Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
-  );
-  proc.wait(null);
-}
-
-/**
- * Applies the requested LED mode.
- *
- * - off: brightness 0 (colour profile preserved).
- * - white / battery: set colour via multi_intensity, then brightness 100.
+ * Applies the requested LED mode by writing directly to multi_intensity.
+ * All-zero intensity turns the LED off without touching the brightness file.
  */
 export function applyMode(
   mode: LedMode,
@@ -90,18 +76,14 @@ export function applyMode(
   chargeIndicator = false,
 ): void {
   try {
-    if (mode === 'off') {
-      setBrightness(0);
-      return;
-    }
-
     const intensity =
-      mode === 'white'
-        ? INTENSITY.white
-        : batteryIntensity(percentage, charging, thresholds, chargeIndicator);
+      mode === 'off'
+        ? INTENSITY.off
+        : mode === 'white'
+          ? INTENSITY.white
+          : batteryIntensity(percentage, charging, thresholds, chargeIndicator);
 
     writeIntensity(intensity);
-    setBrightness(100);
   } catch (e) {
     console.error('[fw-battery-led] Failed to apply LED mode:', e);
   }

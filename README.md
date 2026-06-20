@@ -10,7 +10,7 @@ Three modes are available:
 
 | Mode                  | Behaviour                                         |
 | --------------------- | ------------------------------------------------- |
-| **Off**               | LED disabled via `brightnessctl` (brightness → 0) |
+| **Off**               | LED disabled (all channels → 0)                   |
 | **White**             | White colour profile                              |
 | **Battery Indicator** | Colour by battery level                           |
 
@@ -145,11 +145,13 @@ Triggers a whole rebuild, reinstall & re-enable.
 
 - **No sudo at runtime.** A udev `RUN` rule chmods/chgrps the single
 `multi_intensity` sysfs file to `0664` / `video`. The extension writes to it
-directly via `Gio.File` — no subprocess, no polkit.
+directly via `Gio.File` — no subprocess, no polkit, no external tools.
 - **No network access.** The extension only touches local sysfs and the system
 D-Bus (UPower, read-only).
 - **Battery data via D-Bus.** Battery percentage and charging state are read
 from `org.freedesktop.UPower` — no shell commands.
+- **Off mode** writes all-zero intensity to `multi_intensity` directly — no
+`brightnessctl` or `brightness` sysfs file involved.
 
 ---
 

@@ -17,6 +17,7 @@ import {
 } from 'resource:///org/gnome/shell/extensions/extension.js';
 import { type LedMode, type Thresholds, applyMode } from './led.js';
 import { BatteryMonitor } from './battery.js';
+import { SleepMonitor } from './sleep.js';
 
 // ----- types ----------------------------------------------------------------
 
@@ -122,8 +123,11 @@ export default class PowerLedExtension extends Extension {
   private _toggle: InstanceType<typeof PowerLedToggle> | null = null;
   private _settings: Gio.Settings | null = null;
   private _batteryMonitor: BatteryMonitor | null = null;
+  private _sleepMonitor: SleepMonitor | null = null;
   private _settingsChangedId: number | null = null;
+  private _screenShieldId: number | null = null;
 
+  private _suspended = false;
   private _currentMode: LedMode = 'white';
   private _lastColorMode: ColorMode = 'white';
   private _batteryPercentage = 100;
@@ -157,6 +161,25 @@ export default class PowerLedExtension extends Extension {
       .start()
       .catch(e => console.error('[fw-battery-led] Battery monitor error:', e));
 
+    this._sleepMonitor = new SleepMonitor(sleeping => {
+      this._suspended = sleeping;
+      if (sleeping) {
+        applyMode('off', 0, false);
+      } else {
+        this._applyLed();
+      }
+    });
+
+    this._sleepMonitor.start();
+
+    // Re-apply after the lock screen appears or is dismissed. GNOME resets LED
+    // brightness as part of its wake/lock sequence, so we need to reapply once
+    // the screen shield has settled.
+    this._screenShieldId = Main.screenShield?.connect(
+      'notify::locked',
+      () => this._applyLed(),
+    ) ?? null;
+
     // Re-apply LED immediately when any relevant setting changes.
     this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
       if (key === 'threshold-white' || key === 'threshold-green' ||
@@ -179,6 +202,15 @@ export default class PowerLedExtension extends Extension {
 
     this._batteryMonitor?.stop();
     this._batteryMonitor = null;
+
+    this._sleepMonitor?.stop();
+    this._sleepMonitor = null;
+    this._suspended = false;
+
+    if (this._screenShieldId !== null) {
+      Main.screenShield?.disconnect(this._screenShieldId);
+      this._screenShieldId = null;
+    }
 
     this._indicator?.destroy();
     this._indicator = null;
@@ -218,6 +250,8 @@ export default class PowerLedExtension extends Extension {
   }
 
   private _applyLed(): void {
+    if (this._suspended) return;
+
     const thresholds = this._getThresholds();
     const chargeIndicator = this._settings!.get_boolean('charge-indicator');
     applyMode(
