@@ -4,6 +4,7 @@ import Gio from 'gi://Gio';
 import {
   PopupMenuSection,
   PopupMenuItem,
+  PopupSeparatorMenuItem,
   Ornament,
 } from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {
@@ -14,13 +15,17 @@ import {
   Extension,
   gettext as _,
 } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { type LedMode, applyMode } from './led.js';
+import { type LedMode, type Thresholds, applyMode } from './led.js';
 import { BatteryMonitor } from './battery.js';
+
+// ----- types ----------------------------------------------------------------
+
+type ColorMode = 'white' | 'battery';
 
 // ----- mode metadata --------------------------------------------------------
 
-const MODES: ReadonlyArray<{ id: LedMode; label: string }> = [
-  { id: 'off',     label: 'Off' },
+/** Only the two "on" colour modes appear in the popup menu. */
+const COLOR_MODES: ReadonlyArray<{ id: ColorMode; label: string }> = [
   { id: 'white',   label: 'White' },
   { id: 'battery', label: 'Battery Indicator' },
 ] as const;
@@ -36,26 +41,38 @@ const MODE_SUBTITLE: Record<LedMode, string> = {
 const PowerLedToggle = GObject.registerClass(
   class PowerLedToggle extends QuickMenuToggle {
     private _section: PopupMenuSection | null = null;
-    private _items = new Map<LedMode, PopupMenuItem>();
+    private _items = new Map<ColorMode, PopupMenuItem>();
+    // Guard against re-entrant notify::checked when we set it programmatically.
+    private _settingChecked = false;
 
     constructor(readonly _extension: PowerLedExtension) {
       super({
         title: _('Power LED'),
-        // toggleMode: false — this is a mode selector, not an on/off switch
-        toggleMode: false,
+        // toggleMode: true — left-click toggles on/off; right side opens the menu.
+        toggleMode: true,
         gicon: Gio.icon_new_for_string(
-          `${_extension.path}/icons/power-led.svg`,
+          `${_extension.path}/icons/power-led-symbolic.svg`,
         ),
       });
 
       this.menu.setHeader(
-        Gio.icon_new_for_string(`${_extension.path}/icons/power-led.svg`),
+        Gio.icon_new_for_string(`${_extension.path}/icons/power-led-symbolic.svg`),
         _('Power LED'),
       );
 
+      // Toggle clicked → flip LED on/off.
+      this.connect('notify::checked', () => {
+        if (this._settingChecked) return;
+        if (this.checked) {
+          _extension.restoreColorMode();
+        } else {
+          _extension.setMode('off');
+        }
+      });
+
       this._section = new PopupMenuSection();
 
-      for (const { id, label } of MODES) {
+      for (const { id, label } of COLOR_MODES) {
         const item = new PopupMenuItem(_(label));
         this._section.addMenuItem(item);
         this._items.set(id, item);
@@ -67,6 +84,15 @@ const PowerLedToggle = GObject.registerClass(
 
       this.menu.addMenuItem(this._section);
 
+      // Separator + Preferences link at the bottom of the popup.
+      this.menu.addMenuItem(new PopupSeparatorMenuItem());
+      const prefsItem = new PopupMenuItem(_('Preferences…'));
+      prefsItem.connect('activate', () => {
+        _extension.openPreferences();
+      });
+      this.menu.addMenuItem(prefsItem);
+
+
       this.connect('destroy', () => {
         this._section?.destroy();
         this._section = null;
@@ -76,6 +102,11 @@ const PowerLedToggle = GObject.registerClass(
 
     setActiveMode(mode: LedMode): void {
       this.subtitle = _(MODE_SUBTITLE[mode]);
+
+      // Update checked state without triggering the notify handler.
+      this._settingChecked = true;
+      this.checked = mode !== 'off';
+      this._settingChecked = false;
 
       for (const [id, item] of this._items.entries()) {
         item.setOrnament(id === mode ? Ornament.CHECK : Ornament.NONE);
@@ -91,14 +122,19 @@ export default class PowerLedExtension extends Extension {
   private _toggle: InstanceType<typeof PowerLedToggle> | null = null;
   private _settings: Gio.Settings | null = null;
   private _batteryMonitor: BatteryMonitor | null = null;
+  private _settingsChangedId: number | null = null;
 
   private _currentMode: LedMode = 'white';
+  private _lastColorMode: ColorMode = 'white';
   private _batteryPercentage = 100;
   private _batteryCharging = false;
 
   enable(): void {
     this._settings = this.getSettings();
+
     this._currentMode = (this._settings.get_string('mode') as LedMode) ?? 'white';
+    this._lastColorMode =
+      (this._settings.get_string('color-mode') as ColorMode) ?? 'white';
 
     this._toggle = new PowerLedToggle(this);
     this._indicator = new SystemIndicator();
@@ -121,10 +157,26 @@ export default class PowerLedExtension extends Extension {
       .start()
       .catch(e => console.error('[fw-battery-led] Battery monitor error:', e));
 
+    // Re-apply LED immediately when any relevant setting changes.
+    this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
+      if (key === 'threshold-white' || key === 'threshold-green' ||
+          key === 'threshold-yellow' || key === 'threshold-amber' ||
+          key === 'charge-indicator') {
+        if (this._currentMode === 'battery') {
+          this._applyLed();
+        }
+      }
+    });
+
     this._applyLed();
   }
 
   disable(): void {
+    if (this._settings !== null && this._settingsChangedId !== null) {
+      this._settings.disconnect(this._settingsChangedId);
+      this._settingsChangedId = null;
+    }
+
     this._batteryMonitor?.stop();
     this._batteryMonitor = null;
 
@@ -137,14 +189,43 @@ export default class PowerLedExtension extends Extension {
     this._settings = null;
   }
 
+  /** Set the LED to the given mode and persist it. */
   setMode(mode: LedMode): void {
     this._currentMode = mode;
     this._settings?.set_string('mode', mode);
+
+    if (mode === 'white' || mode === 'battery') {
+      this._lastColorMode = mode;
+      this._settings?.set_string('color-mode', mode);
+    }
+
     this._toggle?.setActiveMode(mode);
     this._applyLed();
   }
 
+  /** Restore the last active colour mode (used when toggling back on). */
+  restoreColorMode(): void {
+    this.setMode(this._lastColorMode);
+  }
+
+  private _getThresholds(): Thresholds {
+    return {
+      white:  this._settings!.get_int('threshold-white'),
+      green:  this._settings!.get_int('threshold-green'),
+      yellow: this._settings!.get_int('threshold-yellow'),
+      amber:  this._settings!.get_int('threshold-amber'),
+    };
+  }
+
   private _applyLed(): void {
-    applyMode(this._currentMode, this._batteryPercentage, this._batteryCharging);
+    const thresholds = this._getThresholds();
+    const chargeIndicator = this._settings!.get_boolean('charge-indicator');
+    applyMode(
+      this._currentMode,
+      this._batteryPercentage,
+      this._batteryCharging,
+      thresholds,
+      chargeIndicator,
+    );
   }
 }

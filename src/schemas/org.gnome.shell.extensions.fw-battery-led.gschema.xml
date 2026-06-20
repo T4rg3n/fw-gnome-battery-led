@@ -2,6 +2,8 @@
 <schemalist>
   <schema id="org.gnome.shell.extensions.fw-battery-led"
           path="/org/gnome/shell/extensions/fw-battery-led/">
+
+    <!-- Overall LED mode (off / white / battery) -->
     <key name="mode" type="s">
       <default>'white'</default>
       <summary>LED Mode</summary>
@@ -10,5 +12,66 @@
         Allowed values: "off", "white", "battery".
       </description>
     </key>
+
+    <!-- Last non-off colour mode; restored when the toggle is switched on -->
+    <key name="color-mode" type="s">
+      <default>'white'</default>
+      <summary>Active colour mode</summary>
+      <description>
+        The last selected colour mode ("white" or "battery").
+        Used to restore the previous choice when the LED is toggled back on.
+      </description>
+    </key>
+
+    <!-- Battery-mode colour thresholds (percentage, 0–100) -->
+    <key name="threshold-white" type="i">
+      <range min="0" max="100"/>
+      <default>50</default>
+      <summary>White threshold (%)</summary>
+      <description>
+        Battery percentage at or above which the LED shows white in battery mode.
+      </description>
+    </key>
+
+    <key name="threshold-green" type="i">
+      <range min="0" max="100"/>
+      <default>30</default>
+      <summary>Green threshold (%)</summary>
+      <description>
+        Battery percentage at or above which the LED shows green in battery mode
+        (and below the white threshold).
+      </description>
+    </key>
+
+    <key name="threshold-yellow" type="i">
+      <range min="0" max="100"/>
+      <default>20</default>
+      <summary>Yellow threshold (%)</summary>
+      <description>
+        Battery percentage at or above which the LED shows yellow in battery mode
+        (and below the green threshold).
+      </description>
+    </key>
+
+    <key name="threshold-amber" type="i">
+      <range min="0" max="100"/>
+      <default>10</default>
+      <summary>Amber threshold (%)</summary>
+      <description>
+        Battery percentage at or above which the LED shows amber in battery mode
+        (and below the yellow threshold). Below this value the LED shows red.
+      </description>
+    </key>
+
+    <!-- Charging colour indicator -->
+    <key name="charge-indicator" type="b">
+      <default>false</default>
+      <summary>Show charging colour</summary>
+      <description>
+        When enabled, the LED shows blue while the battery is charging.
+        Note: the blue LED component is non-functional on some Framework hardware.
+      </description>
+    </key>
+
   </schema>
 </schemalist>

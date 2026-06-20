@@ -19,6 +19,15 @@ const UPOWER_STATE_CHARGING         = 1;
 const UPOWER_STATE_PENDING_CHARGE   = 5;
 
 /**
+ * How long (ms) to wait after a "not charging" UPower signal before acting on
+ * it. The Framework EC fires a spurious Discharging event a couple of seconds
+ * after the charger is connected while it negotiates power delivery; this delay
+ * absorbs that glitch so the LED doesn't briefly revert to the battery-level
+ * colour. Genuine unplugs will still be reflected after this delay.
+ */
+const NOT_CHARGING_DEBOUNCE_MS = 6000;
+
+/**
  * Subscribes to UPower D-Bus signals to track battery percentage and charging
  * state. Notifies a callback whenever the battery state changes.
  *
@@ -28,6 +37,7 @@ export class BatteryMonitor {
   private _proxy: Gio.DBusProxy | null = null;
   private _signalId: number | null = null;
   private _safetyTimerId: number | null = null;
+  private _notChargingTimerId: number | null = null;
   private _cancellable = new Gio.Cancellable();
 
   constructor(private readonly _callback: BatteryCallback) {}
@@ -50,6 +60,11 @@ export class BatteryMonitor {
     if (this._safetyTimerId !== null) {
       GLib.Source.remove(this._safetyTimerId);
       this._safetyTimerId = null;
+    }
+
+    if (this._notChargingTimerId !== null) {
+      GLib.Source.remove(this._notChargingTimerId);
+      this._notChargingTimerId = null;
     }
 
     this._proxy = null;
@@ -87,7 +102,7 @@ export class BatteryMonitor {
     this._signalId = this._proxy.connect(
       'g-properties-changed',
       (_proxy: Gio.DBusProxy, _changed: GLib.Variant, _invalidated: string[]) => {
-        this._notify();
+        this._notifyDebounced();
       },
     );
 
@@ -108,6 +123,41 @@ export class BatteryMonitor {
   private _notify(): void {
     if (this._proxy === null) return;
     this._callback(this._readState(this._proxy));
+  }
+
+  /**
+   * Called on every g-properties-changed signal. Applies hysteresis on the
+   * "not charging" transition: a charging→true update is applied immediately
+   * and cancels any pending not-charging timer; a charging→false update is
+   * deferred by NOT_CHARGING_DEBOUNCE_MS to absorb spurious EC glitches.
+   */
+  private _notifyDebounced(): void {
+    if (this._proxy === null) return;
+    const state = this._readState(this._proxy);
+
+    if (state.charging) {
+      // Charging confirmed — apply immediately and cancel any pending "not charging" update.
+      if (this._notChargingTimerId !== null) {
+        GLib.Source.remove(this._notChargingTimerId);
+        this._notChargingTimerId = null;
+      }
+      this._callback(state);
+    } else {
+      // Possibly not charging — wait before acting to filter transient glitches.
+      if (this._notChargingTimerId !== null) {
+        GLib.Source.remove(this._notChargingTimerId);
+      }
+      this._notChargingTimerId = GLib.timeout_add(
+        GLib.PRIORITY_DEFAULT,
+        NOT_CHARGING_DEBOUNCE_MS,
+        () => {
+          this._notChargingTimerId = null;
+          // Re-read: if the charger came back during the delay, respect that.
+          this._notify();
+          return GLib.SOURCE_REMOVE;
+        },
+      );
+    }
   }
 
   private _readState(proxy: Gio.DBusProxy): BatteryState {

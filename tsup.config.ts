@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 const execAsync = promisify(exec);
 
 export default defineConfig({
-  entry: ['src/extension.ts'],
+  entry: ['src/extension.ts', 'src/prefs.ts'],
   format: ['esm'],
   dts: false,
   minify: false,
