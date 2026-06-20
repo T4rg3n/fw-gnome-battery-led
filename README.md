@@ -1,9 +1,9 @@
 # fw-gnome-battery-led
 
 A GNOME Shell extension for Framework laptops that adds a **Power LED** button
-to the quick-settings panel. 
+to the quick-settings panel.
 
-
+<img src="./.github/quicksettings.png" width="320px" alt="screenshot of the extension with its dropdown in quick settings showing Off, White, and Battery Indicator modes" />
 
 Three modes are available:
 
@@ -20,16 +20,16 @@ Three modes are available:
 
 | Condition | Colour | Photo |
 | --------- | ------ | ----- |
-| ≥ 50 %    | White  |       |
-| 30 – 49 % | Green  |       |
-| 20 – 29 % | Yellow |       |
-| 10 – 19 % | Amber  |       |
-| < 10 %    | Red    |       |
+| ≥ 50 %    | White  | <img src="./.github/led_white.png" width="320px" alt="Framework laptop power LED glowing white at 50% or higher battery" /> |
+| 30 – 49 % | Green  | <img src="./.github/led_green.png" width="320px" alt="Framework laptop power LED glowing green at 30–49% battery" /> |
+| 20 – 29 % | Yellow | <img src="./.github/led_yellow.png" width="320px" alt="Framework laptop power LED glowing yellow at 20–29% battery" /> |
+| 10 – 19 % | Amber  | <img src="./.github/led_amber.png" width="320px" alt="Framework laptop power LED glowing amber at 10–19% battery" /> |
+| < 10 %    | Red    | <img src="./.github/led_red.png" width="320px" alt="Framework laptop power LED glowing red below 10% battery" /> |
 
 
 Thresholds are defined in preferences menu:
 
-
+<img src="./.github/preferences_menu.png" width="320px" alt="screenshot of the extension preferences menu showing configurable battery level thresholds for each LED colour" />
 
 ---
 
