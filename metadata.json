@@ -5,6 +5,7 @@
   "uuid": "fw-battery-led@framework.local",
   "url": "https://github.com/T4rg3n/fw-gnome-battery-led",
   "shell-version": ["47", "48", "49", "50"],
+  "session-modes": ["user", "unlock-dialog"],
   "settings-schema": "org.gnome.shell.extensions.fw-battery-led",
   "gettext-domain": "fw-battery-led@framework.local"
 }

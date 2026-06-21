@@ -18,7 +18,7 @@ const INTENSITY = {
   off:    '0 0 0 0 0 0',
   red:    '100 0 0 0 0 0',
   green:  '0 100 0 0 0 0',
-  blue:   '0 0 100 0 0 0',
+  blue:   '0 0 100 0 0 0', // unsupported on some fw models 
   yellow: '0 0 0 100 0 0',
   white:  '0 0 0 0 100 0',
   amber:  '0 0 0 0 0 100',
@@ -60,8 +60,11 @@ export function batteryIntensity(
 function writeIntensity(value: string): void {
   const file = Gio.File.new_for_path(MULTI_INTENSITY_PATH);
   const stream = file.open_readwrite(null);
-  stream.get_output_stream().write_bytes(new TextEncoder().encode(`${value}\n`), null);
-  stream.close(null);
+  try {
+    stream.get_output_stream().write_bytes(new TextEncoder().encode(`${value}\n`), null);
+  } finally {
+    stream.close(null);
+  }
 }
 
 /**

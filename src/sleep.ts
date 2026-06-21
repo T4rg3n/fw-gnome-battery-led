@@ -1,45 +1,41 @@
-import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
+// @ts-expect-error — loginManager resource has no @girs types but exists at runtime.
+import * as LoginManager from 'resource:///org/gnome/shell/misc/loginManager.js';
 
 export type SleepCallback = (sleeping: boolean) => void;
 
 /**
- * Subscribes to logind's PrepareForSleep D-Bus signal via a direct connection
- * signal subscription (more reliable than GDBusProxy for non-property signals
- * across multiple sleep/wake cycles).
+ * Listens for suspend/resume via GNOME Shell's LoginManager `prepare-for-sleep`
+ * signal. This is the mechanism GNOME Shell itself uses; a raw
+ * `Gio.DBus.system.signal_subscribe` for logind's PrepareForSleep does not get
+ * delivered on the shell's shared system-bus connection.
+ *
+ * The signal fires with `true` just before suspend and `false` after resume.
  */
 export class SleepMonitor {
-  private _subscriptionId: number | null = null;
+  // biome-ignore lint/suspicious/noExplicitAny: LoginManager has no @girs types
+  private _loginManager: any = null;
+  private _signalId: number | null = null;
 
   constructor(private readonly _callback: SleepCallback) {}
 
   start(): void {
-    if (this._subscriptionId !== null) return;
+    if (this._signalId !== null) return;
 
-    this._subscriptionId = Gio.DBus.system.signal_subscribe(
-      'org.freedesktop.login1',
-      'org.freedesktop.login1.Manager',
-      'PrepareForSleep',
-      '/org/freedesktop/login1',
-      null,
-      Gio.DBusSignalFlags.NONE,
-      (
-        _conn: Gio.DBusConnection,
-        _sender: string,
-        _path: string,
-        _iface: string,
-        _signal: string,
-        params: GLib.Variant,
-      ) => {
-        this._callback(params.get_child_value(0).get_boolean());
+    this._loginManager = LoginManager.getLoginManager();
+    this._signalId = this._loginManager.connect(
+      'prepare-for-sleep',
+      // biome-ignore lint/suspicious/noExplicitAny: untyped signal source
+      (_lm: any, aboutToSuspend: boolean) => {
+        this._callback(aboutToSuspend);
       },
     );
   }
 
   stop(): void {
-    if (this._subscriptionId !== null) {
-      Gio.DBus.system.signal_unsubscribe(this._subscriptionId);
-      this._subscriptionId = null;
+    if (this._loginManager !== null && this._signalId !== null) {
+      this._loginManager.disconnect(this._signalId);
     }
+    this._loginManager = null;
+    this._signalId = null;
   }
 }
