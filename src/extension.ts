@@ -15,9 +15,10 @@ import {
   Extension,
   gettext as _,
 } from 'resource:///org/gnome/shell/extensions/extension.js';
-import { type LedMode, type Thresholds, applyMode } from './led.js';
+import { type LedMode, type Thresholds, applyMode, releaseToKernel } from './led.js';
 import { BatteryMonitor } from './battery.js';
 import { SleepMonitor } from './sleep.js';
+import { ShutdownMonitor } from './shutdown.js';
 
 // ----- types ----------------------------------------------------------------
 
@@ -124,6 +125,7 @@ export default class PowerLedExtension extends Extension {
   private _settings: Gio.Settings | null = null;
   private _batteryMonitor: BatteryMonitor | null = null;
   private _sleepMonitor: SleepMonitor | null = null;
+  private _shutdownMonitor: ShutdownMonitor | null = null;
   private _settingsChangedId: number | null = null;
   private _screenShieldId: number | null = null;
 
@@ -164,13 +166,19 @@ export default class PowerLedExtension extends Extension {
     this._sleepMonitor = new SleepMonitor(sleeping => {
       this._suspended = sleeping;
       if (sleeping) {
-        applyMode('off', 0, false);
+        releaseToKernel();
       } else {
         this._applyLed();
       }
     });
 
     this._sleepMonitor.start();
+
+    this._shutdownMonitor = new ShutdownMonitor(() => {
+      releaseToKernel();
+    });
+
+    this._shutdownMonitor.start();
 
     // Re-apply after the lock screen appears or is dismissed. GNOME resets LED
     // brightness as part of its wake/lock sequence, so we need to reapply once
@@ -207,6 +215,9 @@ export default class PowerLedExtension extends Extension {
     this._sleepMonitor = null;
     this._suspended = false;
 
+    this._shutdownMonitor?.stop();
+    this._shutdownMonitor = null;
+
     if (this._screenShieldId !== null) {
       Main.screenShield?.disconnect(this._screenShieldId);
       this._screenShieldId = null;
@@ -219,6 +230,11 @@ export default class PowerLedExtension extends Extension {
     this._toggle = null;
 
     this._settings = null;
+
+    // Hand the LED back to the EC/kernel driver so it resumes automatic
+    // control (charging indicator, etc.) on shutdown or whenever the
+    // extension is disabled.
+    releaseToKernel();
   }
 
   /** Set the LED to the given mode and persist it. */

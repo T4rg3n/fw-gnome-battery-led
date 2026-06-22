@@ -12,6 +12,12 @@ export type Thresholds = {
 const LED_DEVICE = 'chromeos:multicolor:power';
 const MULTI_INTENSITY_PATH = `/sys/class/leds/${LED_DEVICE}/multi_intensity`;
 const BRIGHTNESS_PATH = `/sys/class/leds/${LED_DEVICE}/brightness`;
+const TRIGGER_PATH = `/sys/class/leds/${LED_DEVICE}/trigger`;
+
+// The kernel/EC trigger that manages the LED automatically based on power state
+// (charging, AC present, etc.). Writing this back to the trigger file hands
+// full control back to the Chrome EC driver.
+const KERNEL_TRIGGER = 'chromeos-auto';
 
 // On the Framework multicolor LED, `multi_intensity` sets the per-channel colour
 // while `brightness` is the master on/off multiplier. On cold boot the EC leaves
@@ -73,6 +79,17 @@ function writeIntensity(value: string): void {
   }
 }
 
+/** Writes the LED trigger (group-writable via udev rule). */
+function writeTrigger(value: string): void {
+  const file = Gio.File.new_for_path(TRIGGER_PATH);
+  const stream = file.open_readwrite(null);
+  try {
+    stream.get_output_stream().write_bytes(new TextEncoder().encode(`${value}\n`), null);
+  } finally {
+    stream.close(null);
+  }
+}
+
 /** Writes the master brightness (group-writable via udev rule). 0 turns the LED off. */
 function writeBrightness(level: number): void {
   const file = Gio.File.new_for_path(BRIGHTNESS_PATH);
@@ -81,6 +98,24 @@ function writeBrightness(level: number): void {
     stream.get_output_stream().write_bytes(new TextEncoder().encode(`${level}\n`), null);
   } finally {
     stream.close(null);
+  }
+}
+
+/**
+ * Hands the LED back to the Chrome EC kernel driver by restoring the
+ * `chromeos-auto` trigger. The EC will then manage colour and brightness
+ * automatically based on power state (AC present, charging, etc.), exactly
+ * as it does before any userspace has touched the LED.
+ *
+ * Call this instead of `applyMode('off', …)` when the extension is giving up
+ * control (sleep, shutdown, disable) so the LED behaves naturally during
+ * those phases and the boot sequence is not disrupted.
+ */
+export function releaseToKernel(): void {
+  try {
+    writeTrigger(KERNEL_TRIGGER);
+  } catch (e) {
+    console.error('[fw-battery-led] Failed to release LED to kernel:', e);
   }
 }
 
