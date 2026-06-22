@@ -19,6 +19,7 @@ import { type LedMode, type Thresholds, applyMode, releaseToKernel } from './led
 import { BatteryMonitor } from './battery.js';
 import { SleepMonitor } from './sleep.js';
 import { ShutdownMonitor } from './shutdown.js';
+import { SessionMonitor } from './session.js';
 
 // ----- types ----------------------------------------------------------------
 
@@ -126,6 +127,7 @@ export default class PowerLedExtension extends Extension {
   private _batteryMonitor: BatteryMonitor | null = null;
   private _sleepMonitor: SleepMonitor | null = null;
   private _shutdownMonitor: ShutdownMonitor | null = null;
+  private _sessionMonitor: SessionMonitor | null = null;
   private _settingsChangedId: number | null = null;
   private _screenShieldId: number | null = null;
 
@@ -180,6 +182,12 @@ export default class PowerLedExtension extends Extension {
 
     this._shutdownMonitor.start();
 
+    this._sessionMonitor = new SessionMonitor(() => {
+      releaseToKernel();
+    });
+
+    this._sessionMonitor.start();
+
     // Re-apply after the lock screen appears or is dismissed. GNOME resets LED
     // brightness as part of its wake/lock sequence, so we need to reapply once
     // the screen shield has settled.
@@ -217,6 +225,9 @@ export default class PowerLedExtension extends Extension {
 
     this._shutdownMonitor?.stop();
     this._shutdownMonitor = null;
+
+    this._sessionMonitor?.stop();
+    this._sessionMonitor = null;
 
     if (this._screenShieldId !== null) {
       Main.screenShield?.disconnect(this._screenShieldId);
