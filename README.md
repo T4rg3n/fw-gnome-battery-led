@@ -143,15 +143,16 @@ Triggers a whole rebuild, reinstall & re-enable.
 
 ## Security notes
 
-- **No sudo at runtime.** A udev `RUN` rule chmods/chgrps the single
-`multi_intensity` sysfs file to `0664` / `video`. The extension writes to it
+- **No sudo at runtime.** A udev `RUN` rule chmods/chgrps the `multi_intensity`
+and `brightness` sysfs files to `0664` / `video`. The extension writes to them
 directly via `Gio.File` — no subprocess, no polkit, no external tools.
 - **No network access.** The extension only touches local sysfs and the system
 D-Bus (UPower, read-only).
 - **Battery data via D-Bus.** Battery percentage and charging state are read
 from `org.freedesktop.UPower` — no shell commands.
-- **Off mode** writes all-zero intensity to `multi_intensity` directly — no
-`brightnessctl` or `brightness` sysfs file involved.
+- **Off mode** sets `brightness` to 0 (colour profile preserved). On/colour
+modes write `multi_intensity` and then set `brightness` to 100, because the EC
+leaves `brightness` at 0 after a cold boot.
 
 ---
 

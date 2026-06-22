@@ -11,6 +11,12 @@ export type Thresholds = {
 
 const LED_DEVICE = 'chromeos:multicolor:power';
 const MULTI_INTENSITY_PATH = `/sys/class/leds/${LED_DEVICE}/multi_intensity`;
+const BRIGHTNESS_PATH = `/sys/class/leds/${LED_DEVICE}/brightness`;
+
+// On the Framework multicolor LED, `multi_intensity` sets the per-channel colour
+// while `brightness` is the master on/off multiplier. On cold boot the EC leaves
+// `brightness` at 0, so colour writes alone produce no light — we must set it.
+const MAX_BRIGHTNESS = 100;
 
 // multi_index order on the Framework laptop: red green blue yellow white amber
 // Each value is 0–100 intensity for the corresponding colour component.
@@ -67,9 +73,22 @@ function writeIntensity(value: string): void {
   }
 }
 
+/** Writes the master brightness (group-writable via udev rule). 0 turns the LED off. */
+function writeBrightness(level: number): void {
+  const file = Gio.File.new_for_path(BRIGHTNESS_PATH);
+  const stream = file.open_readwrite(null);
+  try {
+    stream.get_output_stream().write_bytes(new TextEncoder().encode(`${level}\n`), null);
+  } finally {
+    stream.close(null);
+  }
+}
+
 /**
- * Applies the requested LED mode by writing directly to multi_intensity.
- * All-zero intensity turns the LED off without touching the brightness file.
+ * Applies the requested LED mode by writing the colour to multi_intensity and
+ * then setting the master brightness: 0 for off, 100 for on. Setting brightness
+ * is required because the EC leaves it at 0 after a cold boot, which would
+ * otherwise keep the LED dark regardless of the colour intensity.
  */
 export function applyMode(
   mode: LedMode,
@@ -87,6 +106,7 @@ export function applyMode(
           : batteryIntensity(percentage, charging, thresholds, chargeIndicator);
 
     writeIntensity(intensity);
+    writeBrightness(mode === 'off' ? 0 : MAX_BRIGHTNESS);
   } catch (e) {
     console.error('[fw-battery-led] Failed to apply LED mode:', e);
   }
